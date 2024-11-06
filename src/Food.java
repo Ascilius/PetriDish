@@ -2,10 +2,21 @@
 public class Food {
 
 	private double x, y;
+	private boolean eaten = false;
 
-	public Food(double x, double y) {
-		this.x = x;
-		this.y = y;
+	public Food() {
+		double r = Math.random();
+		double a = Math.random() * 2 * Math.PI;
+		this.x = r * Math.cos(a);
+		this.y = r * Math.sin(a);
+	}
+
+	public void eat() {
+		eaten = true;
+	}
+
+	public boolean wasEaten() {
+		return eaten;
 	}
 
 	public double getX() {
