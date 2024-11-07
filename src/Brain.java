@@ -1,58 +1,61 @@
 
 public class Brain {
 
-	double[][] weights = new double[3][2];
+	double[][][] weights = { new double[3][3], new double[3][3], new double[2][3] };
 
 	public Brain() {
-		weights[0][0] = Math.random() - 0.5;
-		weights[0][1] = Math.random() - 0.5;
-		weights[1][0] = Math.random() - 0.5;
-		weights[1][1] = Math.random() - 0.5;
-		weights[2][0] = Math.random() - 0.5;
-		weights[2][1] = Math.random() - 0.5;
-	}
-
-	public Brain(Brain parent) {
-		double[][] parentWeights = parent.getWeights();
-		for (int i = 0; i < 3; i++) {
-			for (int j = 0; j < 2; j++)
-				weights[i][j] = parentWeights[i][j] + (Math.random() - 0.5) * 0.1; // "genetic drift"
+		int il = weights.length;
+		for (int i = 0; i < il; i++) {
+			int jl = weights[i].length;
+			for (int j = 0; j < jl; j++) {
+				int kl = weights[i][j].length;
+				for (int k = 0; k < kl; k++) {
+					weights[i][j][k] = Math.random() - 0.5;
+				}
+			}
 		}
 	}
 
-	// TOFIX: matrix math
-	public double[] doStuff(double[] inputs) {
-		// layer 1
-		double[] layer1 = new double[2];
-		layer1[0] = (inputs[0] + inputs[1]) * weights[0][0];
-		if (layer1[0] < 0)
-			layer1[0] = 0;
-		layer1[1] = (inputs[0] + inputs[1]) * weights[0][1];
-		if (layer1[1] < 0)
-			layer1[1] = 0; // ReLU
+	public Brain(Brain parent) {
+		double[][][] parentWeights = parent.getWeights();
+		int il = weights.length;
+		for (int i = 0; i < il; i++) {
+			int jl = weights[i].length;
+			for (int j = 0; j < jl; j++) {
+				int kl = weights[i][j].length;
+				for (int k = 0; k < kl; k++) {
+					weights[i][j][k] = parentWeights[i][j][k] + (Math.random() - 0.5) * 0.1;
+				}
+			}
+		}
+	}
 
-		// layer 2
-		double[] layer2 = new double[2];
-		layer2[0] = (layer1[0] + layer1[1]) * weights[1][0];
-		if (layer2[0] < 0)
-			layer2[0] = 0;
-		layer2[1] = (layer1[0] + layer1[1]) * weights[1][1];
-		if (layer2[1] < 0)
-			layer2[1] = 0;
+	public double[] multiply(double[][] weights, double[] inputs) {
+		int il = weights.length;
+		double[] outputs = new double[il];
 
-		// output layer
-		double[] outputs = new double[2];
-		outputs[0] = (layer2[0] + layer2[1]) * weights[2][0];
-		if (outputs[0] < 0)
-			outputs[0] = 0;
-		outputs[1] = (layer2[0] + layer2[1]) * weights[2][1];
-		if (outputs[1] < 0)
-			outputs[1] = 0;
+		for (int i = 0; i < il; i++) {
+			int jl = weights[i].length;
+			for (int j = 0; j < jl; j++)
+				outputs[i] += weights[i][j] * inputs[j];
+		}
 
 		return outputs;
 	}
 
-	public double[][] getWeights() {
+	public double[] doStuff(double[] inputs) {
+		// input layer
+		double[] layer1 = multiply(weights[0], inputs);
+
+		// middle layers
+		double[] layer2 = multiply(weights[1], layer1);
+
+		// output layer
+		double[] outputs = multiply(weights[2], layer2);
+		return outputs;
+	}
+
+	public double[][][] getWeights() {
 		return weights;
 	}
 

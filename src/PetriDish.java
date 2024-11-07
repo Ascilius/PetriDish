@@ -10,7 +10,7 @@ public class PetriDish {
 	private final int no = 10; // number of organisms
 	private ArrayList<Organism> organisms = new ArrayList<Organism>();
 	private Organism selected = null;
-	private double range = 0.025; // organism eating range
+	private double range = 0.01; // organism eating range
 	private ArrayList<Integer> census = new ArrayList<Integer>();
 	private int historyLimit = 100;
 
@@ -21,6 +21,7 @@ public class PetriDish {
 	public void reset() {
 		regenerateFood();
 		regenerateOrganisms();
+		step(0);
 	}
 
 	public void regenerateFood() {

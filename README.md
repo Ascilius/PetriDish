@@ -1,9 +1,11 @@
 ## Petri Dish
 
 ### todo
- - add hunger
- - optimize matrix math
  - add predators
+
+### v1.1
+ - added hunger
+ - optimized neural network math
 
 ### v1 (2024-11-06)
  - organisms

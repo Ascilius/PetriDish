@@ -5,7 +5,7 @@ public class Organism {
 
 	// dish
 	private PetriDish dish;
-	
+
 	// physics
 	private double sx, sy;
 	// private double r;
@@ -13,25 +13,28 @@ public class Organism {
 	private double speed = 6 * 10e-6;
 	private double turn = Math.PI / 16;
 	private ArrayList<double[]> path = new ArrayList<>();
-	private int pathLength = -1; // -1 = unlimited
+	private int pathLength = 100; // -1 = unlimited
 
 	// sight
 	ArrayList<LOS> LOSs = new ArrayList<LOS>();
 
 	// attributes
 	private Color color;
+	private double sightRange;
 	private double FOV = Math.PI / 3; // radians
-	private double energy = 1.0, lossRate = 0.005, calories = 0.5;
+	private double energy = 1.0, calories = 0.5;
 	private boolean dead = false;
-	private double splitThreshold = 3.0;
+	private double splitThreshold = 10.0;
 
 	// brain
 	private Brain brain = new Brain();
+	private double[] inputs = new double[3];
+	private double[] outputs;
 
 	public Organism(PetriDish dish, double sx, double sy, double dir) {
 		// dish
 		this.dish = dish;
-		
+
 		// physics
 		this.sx = sx;
 		this.sy = sy;
@@ -40,11 +43,12 @@ public class Organism {
 
 		// attributes
 		color = new Color((int) (Math.random() * 256), (int) (Math.random() * 256), (int) (Math.random() * 256));
+		sightRange = 0.25;
 	}
 
 	public Organism(Organism parent) {
 		this.dish = parent.getDish();
-		
+
 		this.sx = parent.getSX();
 		this.sy = parent.getSY();
 		this.dir = Math.random() * 2 * Math.PI;
@@ -52,6 +56,10 @@ public class Organism {
 		this.color = parent.getColor();
 
 		this.brain = new Brain(parent.getBrain());
+
+		// attributes
+		this.speed = parent.getSpeed() + (Math.random() - 0.5) * 10e-6;
+		this.sightRange = parent.getSightRange() + (Math.random() - 0.5) * 0.05;
 	}
 
 	public void move(long timeStep) { // timeStep in ms
@@ -64,11 +72,11 @@ public class Organism {
 
 		// moving
 		this.turn(); // random turn
-		sx += speed * (1000 / timeStep) * Math.cos(dir);
-		sy += speed * (1000 / timeStep) * Math.sin(dir);
-		energy -= lossRate; // organism spends energy
-		if (energy <= 0.0)
-			dead = true; // mark organism as dead;
+		if (timeStep != 0) {
+			sx += speed * (1000 / timeStep) * Math.cos(dir);
+			sy += speed * (1000 / timeStep) * Math.sin(dir);
+			spendEnergy();
+		}
 
 		// bounds check
 		double r = Math.sqrt(Math.pow(sx, 2) + Math.pow(sy, 2));
@@ -91,8 +99,10 @@ public class Organism {
 			if (los.isRight())
 				r++;
 		}
-		double[] inputs = { l, r };
-		double[] outputs = brain.doStuff(inputs);
+		inputs[0] = l;
+		inputs[1] = r;
+		inputs[2] = energy;
+		outputs = brain.doStuff(inputs);
 
 		// turning based off of neural network
 		dir += outputs[0] - outputs[1];
@@ -107,43 +117,59 @@ public class Organism {
 		}
 	}
 
+	private void spendEnergy() {
+		// organism spends based on speed
+		energy -= speed * 10;
+
+		// more sight requires more energy
+		energy -= sightRange / 50;
+
+		if (energy <= 0.0)
+			dead = true; // mark organism as dead
+	}
+
 	public void clearLOSs() {
 		LOSs.clear();
 	}
 
 	// checking whether other organism is within FOV and which side of sight it is in
 	public void seeFood(Food food) {
-		// v1
-		double x1 = Math.cos(dir);
-		double y1 = Math.sin(dir);
-		double v1 = 1;
+		// maximum sight range
+		double d = Math.sqrt(Math.pow(food.getX() - sx, 2) + Math.pow(food.getY() - sy, 2));
+		if (d < sightRange) {
 
-		// v2
-		double x2 = food.getX() - sx;
-		double y2 = food.getY() - sy;
-		double v2 = Math.sqrt(x2 * x2 + y2 * y2);
+			// v1
+			double x1 = Math.cos(dir);
+			double y1 = Math.sin(dir);
+			double v1 = 1;
 
-		// angle between two vectors
-		double t = Math.acos((x1 * x2 + y1 * y2) / (v1 * v2));
+			// v2
+			double x2 = food.getX() - sx;
+			double y2 = food.getY() - sy;
+			double v2 = Math.sqrt(x2 * x2 + y2 * y2);
 
-		// checking if within FOV
-		boolean valid = t < FOV / 2;
+			// angle between two vectors
+			double t = Math.acos((x1 * x2 + y1 * y2) / (v1 * v2));
 
-		// determining side of sight
-		boolean left = false;
-		boolean right = false;
-		if (valid) {
-			double k = x1 * y2 - y1 * x2; // ugh vector math
-			// System.out.println("Debug: " + x1 + " * " + y2 + " - " + y1 + " * " + x1 + " = " + k);
-			if (k > 0)
-				left = true;
-			else
-				right = true;
+			// checking if within FOV
+			boolean valid = t < FOV / 2;
+
+			// determining side of sight
+			boolean left = false;
+			boolean right = false;
+			if (valid) {
+				double k = x1 * y2 - y1 * x2; // ugh vector math
+				// System.out.println("Debug: " + x1 + " * " + y2 + " - " + y1 + " * " + x1 + " = " + k);
+				if (k > 0)
+					left = true;
+				else
+					right = true;
+			}
+
+			// saving
+			LOS los = new LOS(food, valid, left, right);
+			LOSs.add(los);
 		}
-
-		// saving
-		LOS los = new LOS(food, valid, left, right);
-		LOSs.add(los);
 	}
 
 	public void eatFood(Food food) {
@@ -154,7 +180,7 @@ public class Organism {
 		}
 		food.eat();
 	}
-	
+
 	// get the dish this organism is in
 	public PetriDish getDish() {
 		return dish;
@@ -178,12 +204,20 @@ public class Organism {
 		return dir;
 	}
 
+	public double getSpeed() {
+		return speed;
+	}
+
 	public Color getColor() {
 		return color;
 	}
 
 	public ArrayList<double[]> getPath() {
 		return path;
+	}
+
+	public double getSightRange() {
+		return sightRange;
 	}
 
 	public double getFOV() {
@@ -198,6 +232,14 @@ public class Organism {
 		return brain;
 	}
 
+	public double[] getInputs() {
+		return inputs;
+	}
+
+	public double[] getOutputs() {
+		return outputs;
+	}
+
 	public double getEnergy() {
 		return energy;
 	}
@@ -205,4 +247,5 @@ public class Organism {
 	public boolean isDead() {
 		return dead;
 	}
+
 }

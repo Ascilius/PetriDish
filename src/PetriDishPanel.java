@@ -179,23 +179,24 @@ public class PetriDishPanel extends JPanel {
 
 				// dir
 				double dir = organism.getDir();
+				double sightRange = organism.getSightRange();
 				int x1 = (int) Math.round(x + osize + Math.cos(dir) * osize);
 				int y1 = (int) Math.round(y + osize - Math.sin(dir) * osize);
-				int x2 = (int) Math.round(x + osize + Math.cos(dir) * (osize + 50));
-				int y2 = (int) Math.round(y + osize - Math.sin(dir) * (osize + 50));
+				int x2 = (int) Math.round(x + osize + Math.cos(dir) * r * sightRange);
+				int y2 = (int) Math.round(y + osize - Math.sin(dir) * r * sightRange);
 				g.drawLine(x1, y1, x2, y2);
 
 				// FOV
 				double FOV = organism.getFOV();
 				int x3 = (int) Math.round(x + osize + Math.cos(dir + FOV / 2) * osize);
 				int y3 = (int) Math.round(y + osize - Math.sin(dir + FOV / 2) * osize);
-				int x4 = (int) Math.round(x + osize + Math.cos(dir + FOV / 2) * (osize + 50));
-				int y4 = (int) Math.round(y + osize - Math.sin(dir + FOV / 2) * (osize + 50));
+				int x4 = (int) Math.round(x + osize + Math.cos(dir + FOV / 2) * r * sightRange);
+				int y4 = (int) Math.round(y + osize - Math.sin(dir + FOV / 2) * r * sightRange);
 				g.drawLine(x3, y3, x4, y4);
 				int x5 = (int) Math.round(x + osize + Math.cos(dir - FOV / 2) * osize);
 				int y5 = (int) Math.round(y + osize - Math.sin(dir - FOV / 2) * osize);
-				int x6 = (int) Math.round(x + osize + Math.cos(dir - FOV / 2) * (osize + 50));
-				int y6 = (int) Math.round(y + osize - Math.sin(dir - FOV / 2) * (osize + 50));
+				int x6 = (int) Math.round(x + osize + Math.cos(dir - FOV / 2) * r * sightRange);
+				int y6 = (int) Math.round(y + osize - Math.sin(dir - FOV / 2) * r * sightRange);
 				g.drawLine(x5, y5, x6, y6);
 
 				// selected-specific information
@@ -221,36 +222,16 @@ public class PetriDishPanel extends JPanel {
 						g.drawLine(x7, y7, x8, y8);
 					}
 
-					// brain / neural network
-					g.setColor(Color.WHITE);
-					double[][] weights = organism.getBrain().getWeights();
-					int layers = weights.length;
-					int neurons = weights[0].length;
-					for (int i = 0; i < layers; i++) {
-						for (int j = 0; j < neurons; j++) {
-							g.drawString(Double.toString(round(weights[i][j])), 1500 + i * 100, 50 + j * 100);
-						}
-					}
+					// sight range
+					g.setColor(Color.RED);
+					x = (int) Math.round(cx + r * (organism.getSX() - sightRange));
+					y = (int) Math.round(cy - r * (organism.getSY() + sightRange));
+					w = (int) Math.round(r * sightRange * 2);
+					h = w;
+					g.drawOval(x, y, w, h);
 				}
 			}
 		}
-		/*
-		if (selected != null) {
-			g.setColor(Color.BLACK);
-			// box
-			int x1 = (int) (selected.getSX() - selected.getR());
-			int y1 = (int) (selected.getSY() - selected.getR());
-			int l = (int) (selected.getR() * 2);
-			int w = (int) (selected.getR() * 2);
-			g.drawRect(x1, y1, l, w);
-			// vector
-			x1 = (int) selected.getSX();
-			y1 = (int) selected.getSY();
-			int x2 = x1 + (int) (50 * Math.cos(selected.getDir()));
-			int y2 = y1 + (int) (50 * Math.sin(selected.getDir()));
-			g.drawLine(x1, y1, x2, y2);
-		}
-		*/
 	}
 
 	private void paintDebug(Graphics2D g) {
@@ -280,9 +261,9 @@ public class PetriDishPanel extends JPanel {
 			debugMenu.add("Y: " + selected.getSY());
 			// debugMenu.add("R: " + selected.getR());
 			debugMenu.add("Direction: " + (selected.getDir() / Math.PI * 180));
-			debugMenu.add("Path: " + selected.getPath().size());
-			debugMenu.add("LOS: " + selected.getLOSs().size());
 			debugMenu.add("Energy: " + selected.getEnergy());
+			debugMenu.add("Speed: " + selected.getSpeed());
+			debugMenu.add("Sight Range: " + round(selected.getSightRange()));
 		}
 		debugMenu.add("");
 		debugMenu.add("Buffer: " + buffer);
