@@ -1,251 +1,264 @@
 import java.awt.Color;
 import java.util.ArrayList;
 
-public class Organism {
+public class Organism implements Entity {
 
 	// dish
-	private PetriDish dish;
+	protected PetriDish dish;
 
 	// physics
-	private double sx, sy;
-	// private double r;
-	private double dir;
-	private double speed = 6 * 10e-6;
-	private double turn = Math.PI / 16;
-	private ArrayList<double[]> path = new ArrayList<>();
-	private int pathLength = 100; // -1 = unlimited
+	protected double x, y;
+	protected double a; // radians
 
-	// sight
-	ArrayList<LOS> LOSs = new ArrayList<LOS>();
+	// path
+	protected ArrayList<double[]> path = new ArrayList<>();
+	protected int pathLength = 100; // -1 = unlimited
 
 	// attributes
-	private Color color;
-	private double sightRange;
-	private double FOV = Math.PI / 3; // radians
-	private double energy = 1.0, calories = 0.5;
-	private boolean dead = false;
-	private double splitThreshold = 10.0;
+	protected Color color;
+	protected double energy = 1.0, splitThreshold;
+	protected boolean eaten = false, dead = false;
+
+	// movement
+	protected double speed = 3 * 10e-6, speedCost = 16;
+	protected double turn = Math.PI / 16;
+
+	// sight
+	protected double sightRange = 0.25, rangeCost = 10e-4;
+	protected double FOV = Math.PI / 3, FOVCost = 0.1;
+	protected ArrayList<Entity> leftSight = new ArrayList<Entity>(); // entities the organism sees on its left
+	protected ArrayList<Entity> rightSight = new ArrayList<Entity>();
 
 	// brain
-	private Brain brain = new Brain();
-	private double[] inputs = new double[3];
-	private double[] outputs;
+	protected Brain brain = new Brain();
+	protected double[] inputs = new double[7]; // hunger (1), avg left color (rgb) (3), avg right color (rgb) (3), total 7
+	protected double[] outputs = new double[3]; // speed, left turn, right turn (3)
 
-	public Organism(PetriDish dish, double sx, double sy, double dir) {
-		// dish
+	public Organism(PetriDish dish, double x, double y, double a, Color color) {
 		this.dish = dish;
 
-		// physics
-		this.sx = sx;
-		this.sy = sy;
-		// this.r = r;
-		this.dir = dir;
+		this.x = x;
+		this.y = y;
+		this.a = a;
 
-		// attributes
-		color = new Color((int) (Math.random() * 256), (int) (Math.random() * 256), (int) (Math.random() * 256));
-		sightRange = 0.25;
+		this.color = color;
 	}
 
 	public Organism(Organism parent) {
 		this.dish = parent.getDish();
 
-		this.sx = parent.getSX();
-		this.sy = parent.getSY();
-		this.dir = Math.random() * 2 * Math.PI;
+		this.x = parent.getX();
+		this.y = parent.getY();
+		this.a = Math.random() * 2 * Math.PI;
 
 		this.color = parent.getColor();
 
-		this.brain = new Brain(parent.getBrain());
-
-		// attributes
 		this.speed = parent.getSpeed() + (Math.random() - 0.5) * 10e-6;
 		this.sightRange = parent.getSightRange() + (Math.random() - 0.5) * 0.05;
+
+		this.brain = new Brain(parent.getBrain());
+	}
+
+	// processing world information through brain
+	public void think() {
+		// hunger
+		inputs[0] = energy;
+
+		// left sight
+		inputs[1] = 0;
+		inputs[2] = 0;
+		inputs[3] = 0;
+		int size = leftSight.size();
+		if (size > 0) {
+			for (int i = 0; i < size; i++) {
+				Color entityColor = leftSight.get(i).getColor();
+				inputs[1] += entityColor.getRed();
+				inputs[2] += entityColor.getGreen();
+				inputs[3] += entityColor.getBlue();
+			}
+			/*
+			inputs[1] /= size;
+			inputs[2] /= size;
+			inputs[3] /= size;
+			*/
+		}
+
+		// right sight
+		inputs[4] = 0;
+		inputs[5] = 0;
+		inputs[6] = 0;
+		size = rightSight.size();
+		if (size > 0) {
+			for (int i = 0; i < size; i++) {
+				Color entityColor = rightSight.get(i).getColor();
+				inputs[4] += entityColor.getRed();
+				inputs[5] += entityColor.getGreen();
+				inputs[6] += entityColor.getBlue();
+			}
+			/*
+			inputs[4] /= size;
+			inputs[5] /= size;
+			inputs[6] /= size;
+			*/
+		}
+
+		// thinking
+		outputs = brain.think(inputs);
+		/*
+		System.out.println("Debug: " + inputs[0] + ", " + inputs[1] + ", " + inputs[2] + ", " + inputs[3] + ", " + inputs[4] + ", " + inputs[5] + ", " + inputs[6]);
+		System.out.println("Debug: " + outputs[0] + ", " + outputs[1] + ", " + outputs[2] + "\n");
+		*/
 	}
 
 	public void move(long timeStep) { // timeStep in ms
-		// organism path
-		double[] previous = { this.sx, this.sy };
+		// path
+		double[] previous = { x, y };
 		this.path.add(previous);
-		if (pathLength != -1 && path.size() > pathLength) {
+		if (pathLength != -1 && path.size() > pathLength)
 			path.remove(0);
-		}
+
+		// turning
+		turn();
 
 		// moving
-		this.turn(); // random turn
-		if (timeStep != 0) {
-			sx += speed * (1000 / timeStep) * Math.cos(dir);
-			sy += speed * (1000 / timeStep) * Math.sin(dir);
-			spendEnergy();
-		}
+		// double desiredSpeed = speed;
+		double desiredSpeed = speed * (1 / (1 + Math.pow(Math.E, -4 * outputs[0]))); // brain determines speed
+		double cos = Math.cos(a);
+		double dx = desiredSpeed * (1000 / timeStep) * Math.cos(a);
+		double sin = Math.sin(a);
+		double dy = desiredSpeed * (1000 / timeStep) * Math.sin(a);
+		/*
+		System.out.println("Debug: speed: " + speed);
+		System.out.println("Debug: a: " + a);
+		System.out.println("Debug: cos: " + cos);
+		System.out.println("Debug: sin: " + sin);
+		System.out.println("Debug: timeStep: " + timeStep);
+		System.out.println("Debug: desiredSpeed: " + desiredSpeed);
+		System.out.println("Debug: timeStep: " + timeStep);
+		System.out.println("Debug: ( " + dx + ", " + dy + " )\n");
+		*/
+		x += dx;
+		y += dy;
 
 		// bounds check
-		double r = Math.sqrt(Math.pow(sx, 2) + Math.pow(sy, 2));
-		double a = Math.atan(sy / sx);
+		double r = Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
+		double a = Math.atan(y / x);
 		if (r > 1) {
-			if (sx < 0)
+			if (x < 0)
 				a += Math.PI;
-			sx = Math.cos(a);
-			sy = Math.sin(a);
+			x = Math.cos(a);
+			y = Math.sin(a);
 		}
+
+		// use energy
+		spendEnergy(desiredSpeed);
 	}
 
 	public void turn() {
-		// processing information through brain
-		int l = 0;
-		int r = 0;
-		for (LOS los : LOSs) {
-			if (los.isLeft())
-				l++;
-			if (los.isRight())
-				r++;
-		}
-		inputs[0] = l;
-		inputs[1] = r;
-		inputs[2] = energy;
-		outputs = brain.doStuff(inputs);
+		// brain determines turn
+		a += outputs[1] - outputs[2];
 
-		// turning based off of neural network
-		dir += outputs[0] - outputs[1];
-		overflow();
+		// over 360
+		while (a >= (2 * Math.PI))
+			a -= 2 * Math.PI;
+
+		// below 0
+		while (a < 0)
+			a += 2 * Math.PI;
 	}
 
-	private void overflow() {
-		if (dir >= (2 * Math.PI)) {
-			dir -= 2 * Math.PI;
-		} else if (dir < 0) {
-			dir += 2 * Math.PI;
-		}
-	}
-
-	private void spendEnergy() {
+	private void spendEnergy(double desiredSpeed) {
 		// organism spends based on speed
-		energy -= speed * 10;
+		energy -= desiredSpeed * speedCost;
 
 		// more sight requires more energy
-		energy -= sightRange / 50;
+		energy -= sightRange * rangeCost;
 
+		// ran out of energy
 		if (energy <= 0.0)
 			dead = true; // mark organism as dead
 	}
 
-	public void clearLOSs() {
-		LOSs.clear();
+	public void clearSight() {
+		leftSight.clear();
+		rightSight.clear();
 	}
 
-	// checking whether other organism is within FOV and which side of sight it is in
-	public void seeFood(Food food) {
+	// locates other entities
+	public void seeEntity(Entity other) {
+		// getting other information
+		double ox = other.getX();
+		double oy = other.getY();
+
 		// maximum sight range
-		double d = Math.sqrt(Math.pow(food.getX() - sx, 2) + Math.pow(food.getY() - sy, 2));
+		double dx = ox - x;
+		double dy = oy - y;
+		double d = Math.sqrt(dx * dx + dy * dy);
 		if (d < sightRange) {
 
 			// v1
-			double x1 = Math.cos(dir);
-			double y1 = Math.sin(dir);
+			double x1 = Math.cos(a);
+			double y1 = Math.sin(a);
 			double v1 = 1;
 
 			// v2
-			double x2 = food.getX() - sx;
-			double y2 = food.getY() - sy;
+			double x2 = dx;
+			double y2 = dy;
 			double v2 = Math.sqrt(x2 * x2 + y2 * y2);
 
 			// angle between two vectors
 			double t = Math.acos((x1 * x2 + y1 * y2) / (v1 * v2));
 
 			// checking if within FOV
-			boolean valid = t < FOV / 2;
+			if (t < FOV / 2) {
 
-			// determining side of sight
-			boolean left = false;
-			boolean right = false;
-			if (valid) {
-				double k = x1 * y2 - y1 * x2; // ugh vector math
-				// System.out.println("Debug: " + x1 + " * " + y2 + " - " + y1 + " * " + x1 + " = " + k);
+				// determining side of sight
+				double k = x1 * y2 - y1 * x2;
 				if (k > 0)
-					left = true;
+					leftSight.add(other); // left side sight
 				else
-					right = true;
+					rightSight.add(other); // right
 			}
-
-			// saving
-			LOS los = new LOS(food, valid, left, right);
-			LOSs.add(los);
 		}
 	}
 
-	public void eatFood(Food food) {
-		energy += calories;
-		if (energy >= splitThreshold) {
-			energy /= 2;
-			dish.addOrganism(new Organism(this));
-		}
-		food.eat();
+	// eaten functions are specified within respective organism files
+	public double eaten() {
+		System.out.println("ERROR: Something has gone wrong");
+		return 0;
 	}
 
-	// get the dish this organism is in
-	public PetriDish getDish() {
-		return dish;
-	}
+	// TOREMOVE: @formatter:off
+	// dish
+	public PetriDish getDish() { return dish; }
+	
+	// physics
+	public double getX() { return x; }
+	public double getY() { return y; }
+	public double getDir() { return a; }
+	
+	// other
+	public Color getColor() { return color; }
+	public ArrayList<double[]> getPath() { return path; }
 
-	public double getSX() {
-		return sx;
-	}
+	// state
+	public double getEnergy() { return energy; }
+	public boolean wasEaten() { return eaten; }
+	public boolean isDead() { return dead; }
+	
+	// movement
+	public double getSpeed() { return speed; }
+	
+	// sight
+	public double getSightRange() { return sightRange; }
+	public double getFOV() { return FOV; }
+	public ArrayList<Entity> getLeftSight() { return leftSight; }
+	public ArrayList<Entity> getRightSight() { return rightSight; }
 
-	public double getSY() {
-		return sy;
-	}
-
-	/*
-	public double getR() {
-		return r;
-	}
-	*/
-
-	public double getDir() {
-		return dir;
-	}
-
-	public double getSpeed() {
-		return speed;
-	}
-
-	public Color getColor() {
-		return color;
-	}
-
-	public ArrayList<double[]> getPath() {
-		return path;
-	}
-
-	public double getSightRange() {
-		return sightRange;
-	}
-
-	public double getFOV() {
-		return FOV;
-	}
-
-	public ArrayList<LOS> getLOSs() {
-		return LOSs;
-	}
-
-	public Brain getBrain() {
-		return brain;
-	}
-
-	public double[] getInputs() {
-		return inputs;
-	}
-
-	public double[] getOutputs() {
-		return outputs;
-	}
-
-	public double getEnergy() {
-		return energy;
-	}
-
-	public boolean isDead() {
-		return dead;
-	}
+	// brain
+	public Brain getBrain() { return brain; }
+	public double[] getInputs() { return inputs; }
+	public double[] getOutputs() { return outputs; }
+	// TOREMOVE: @formatter: on
 
 }

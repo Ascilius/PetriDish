@@ -1,7 +1,7 @@
 
 public class Brain {
 
-	double[][][] weights = { new double[3][3], new double[3][3], new double[2][3] };
+	double[][][] weights = { new double[6][7], new double[5][6], new double[4][5], new double[3][4] };
 
 	public Brain() {
 		int il = weights.length;
@@ -43,15 +43,30 @@ public class Brain {
 		return outputs;
 	}
 
-	public double[] doStuff(double[] inputs) {
+	public void ReLU(double[] layer) {
+		int size = layer.length;
+		for (int i = 0; i < size; i++) {
+			if (layer[i] < 0)
+				layer[i] = 0;
+		}
+	}
+
+	public double[] think(double[] inputs) {
 		// input layer
-		double[] layer1 = multiply(weights[0], inputs);
+		double[] prevLayer = multiply(weights[0], inputs);
+		ReLU(prevLayer);
 
 		// middle layers
-		double[] layer2 = multiply(weights[1], layer1);
+		int nml = weights.length - 2; // number of middle layers
+		for (int i = 1; i < nml + 1; i++) {
+			double[] layer = multiply(weights[i], prevLayer);
+			ReLU(layer);
+			prevLayer = layer;
+		}
 
 		// output layer
-		double[] outputs = multiply(weights[2], layer2);
+		double[] outputs = multiply(weights[weights.length - 1], prevLayer);
+		ReLU(outputs);
 		return outputs;
 	}
 

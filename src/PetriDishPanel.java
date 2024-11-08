@@ -36,6 +36,9 @@ public class PetriDishPanel extends JPanel {
 	// dish
 	private int r, buffer = 50, osize = 5;
 	private PetriDish dish;
+	private boolean paths = true;
+	private int t = 0;
+	private int n = 1000; // how often to take a census
 
 	// inputs
 	private KeyHandler keyHandler; // key inputs
@@ -84,14 +87,20 @@ public class PetriDishPanel extends JPanel {
 
 		// dish
 		paintDish(g);
-		if (pause == false)
-			dish.step(targetTime);
+		if (pause == false) {
+			if (t >= n) {
+				dish.takeCensus();
+				t = 0;
+			}
+			step();
+		}
 
 		// debug
 		if (debug)
 			paintDebug(g);
 
 		// end frame (TOFIX: need more accurate timekeeping)
+		t++;
 		totalFrames++;
 		long endTime = System.currentTimeMillis();
 		frameTime = endTime - startTime;
@@ -133,13 +142,15 @@ public class PetriDishPanel extends JPanel {
 		int cx = screenWidth / 2;
 		int cy = screenHeight / 2;
 
-		g.setColor(Color.BLACK);
-		ArrayList<Food> foods = dish.getFoods();
-		for (Food food : foods) {
-			int x = (int) Math.round(cx + r * food.getX()) - 1;
-			int y = (int) Math.round(cy - r * food.getY()) - 1;
+		ArrayList<Agar> agars = dish.getAgars();
+		for (Agar agar : agars) {
+			int x = (int) Math.round(cx + r * agar.getX()) - 1;
+			int y = (int) Math.round(cy - r * agar.getY()) - 1;
 			int w = 2;
 			int h = 2;
+			g.setColor(agar.getColor());
+			g.fillOval(x, y, w, h);
+			g.setColor(Color.BLACK);
 			g.drawOval(x, y, w, h);
 		}
 
@@ -153,26 +164,31 @@ public class PetriDishPanel extends JPanel {
 
 		ArrayList<Organism> organisms = dish.getOrganisms();
 		for (Organism organism : organisms) {
-			g.setColor(organism.getColor());
-			int x = (int) Math.round(cx + r * organism.getSX()) - osize;
-			int y = (int) Math.round(cy - r * organism.getSY()) - osize;
+			int x = (int) Math.round(cx + r * organism.getX()) - osize;
+			int y = (int) Math.round(cy - r * organism.getY()) - osize;
 			int w = osize * 2;
 			int h = osize * 2;
+			g.setColor(organism.getColor());
 			g.fillOval(x, y, w, h);
+			g.setColor(Color.BLACK);
+			g.drawOval(x, y, w, h);
 
 			// paths
-			ArrayList<double[]> path = organism.getPath();
-			int size = path.size();
-			for (int i = 0; i < size - 1; i++) {
-				int x1 = (int) Math.round(cx + r * path.get(i)[0]);
-				int y1 = (int) Math.round(cy - r * path.get(i)[1]);
-				int x2 = (int) Math.round(cx + r * path.get(i + 1)[0]);
-				int y2 = (int) Math.round(cy - r * path.get(i + 1)[1]);
-				g.drawLine(x1, y1, x2, y2);
+			if (paths) {
+				g.setColor(organism.getColor());
+				ArrayList<double[]> path = organism.getPath();
+				int size = path.size();
+				for (int i = 0; i < size - 1; i++) {
+					int x1 = (int) Math.round(cx + r * path.get(i)[0]);
+					int y1 = (int) Math.round(cy - r * path.get(i)[1]);
+					int x2 = (int) Math.round(cx + r * path.get(i + 1)[0]);
+					int y2 = (int) Math.round(cy - r * path.get(i + 1)[1]);
+					g.drawLine(x1, y1, x2, y2);
+				}
 			}
 
 			// bounds, FOV, and LOS
-			if (debug) {
+			if (debug && organism.equals(dish.getSelected())) {
 				// bounds
 				g.setColor(Color.BLUE);
 				g.drawRect(x, y, w, h);
@@ -199,39 +215,49 @@ public class PetriDishPanel extends JPanel {
 				int y6 = (int) Math.round(y + osize - Math.sin(dir - FOV / 2) * r * sightRange);
 				g.drawLine(x5, y5, x6, y6);
 
-				// selected-specific information
-				if (organism == dish.getSelected()) {
-					// LOS
-					ArrayList<LOS> LOSs = organism.getLOSs();
-					for (LOS los : LOSs) {
-						// determining validity of sight
-						g.setColor(Color.RED);
-						if (los.withinFOV()) {
-							if (los.isLeft())
-								g.setColor(Color.YELLOW);
-							else if (los.isRight())
-								g.setColor(Color.GREEN);
-						}
-
-						// drawing line
-						Food target = los.getTarget();
-						int x7 = x + osize;
-						int y7 = y + osize;
-						int x8 = (int) Math.round(cx + r * target.getX());
-						int y8 = (int) Math.round(cy - r * target.getY());
-						g.drawLine(x7, y7, x8, y8);
-					}
-
-					// sight range
-					g.setColor(Color.RED);
-					x = (int) Math.round(cx + r * (organism.getSX() - sightRange));
-					y = (int) Math.round(cy - r * (organism.getSY() + sightRange));
-					w = (int) Math.round(r * sightRange * 2);
-					h = w;
-					g.drawOval(x, y, w, h);
+				// left sight
+				ArrayList<Entity> leftSight = organism.getLeftSight();
+				g.setColor(Color.YELLOW);
+				for (Entity entity : leftSight) {
+					int x7 = x + osize;
+					int y7 = y + osize;
+					int x8 = (int) Math.round(cx + r * entity.getX());
+					int y8 = (int) Math.round(cy - r * entity.getY());
+					g.drawLine(x7, y7, x8, y8);
 				}
+
+				// right sight
+				ArrayList<Entity> rightSight = organism.getRightSight();
+				g.setColor(Color.GREEN);
+				for (Entity entity : rightSight) {
+					int x9 = x + osize;
+					int y9 = y + osize;
+					int x10 = (int) Math.round(cx + r * entity.getX());
+					int y10 = (int) Math.round(cy - r * entity.getY());
+					g.drawLine(x9, y9, x10, y10);
+				}
+
+				// sight range
+				g.setColor(Color.RED);
+				x = (int) Math.round(cx + r * (organism.getX() - sightRange));
+				y = (int) Math.round(cy - r * (organism.getY() + sightRange));
+				w = (int) Math.round(r * sightRange * 2);
+				h = w;
+				g.drawOval(x, y, w, h);
 			}
 		}
+	}
+
+	public String toString(double[] arr) {
+		String str = "[ ";
+		int size = arr.length;
+		for (int i = 0; i < size; i++) {
+			if (i != 0)
+				str += ", ";
+			str += round(arr[i]);
+		}
+		str += " ]";
+		return str;
 	}
 
 	private void paintDebug(Graphics2D g) {
@@ -257,20 +283,22 @@ public class PetriDishPanel extends JPanel {
 		Organism selected = dish.getSelected();
 		if (selected != null) {
 			debugMenu.add("Selected: " + selected);
-			debugMenu.add("X: " + selected.getSX());
-			debugMenu.add("Y: " + selected.getSY());
-			// debugMenu.add("R: " + selected.getR());
-			debugMenu.add("Direction: " + (selected.getDir() / Math.PI * 180));
-			debugMenu.add("Energy: " + selected.getEnergy());
+			debugMenu.add("X: " + selected.getX());
+			debugMenu.add("Y: " + selected.getY());
+			debugMenu.add("Direction: " + round(selected.getDir() / Math.PI * 180));
+			debugMenu.add("Energy: " + round(selected.getEnergy()));
 			debugMenu.add("Speed: " + selected.getSpeed());
 			debugMenu.add("Sight Range: " + round(selected.getSightRange()));
+			debugMenu.add("Inputs: " + toString(selected.getInputs()));
+			debugMenu.add("Outputs: " + toString(selected.getOutputs()));
 		}
 		debugMenu.add("");
 		debugMenu.add("Buffer: " + buffer);
 		debugMenu.add("Radius: " + r);
 		debugMenu.add("");
-		debugMenu.add("Organisms: " + dish.getOrganisms().size());
-		debugMenu.add("Foods: " + dish.getFoods().size());
+		debugMenu.add("Foods: " + dish.getAgars().size());
+		debugMenu.add("Herbivores: " + dish.getHerbs().size());
+		debugMenu.add("Carnivores: " + dish.getCarns().size());
 		// printing
 		int size = debugMenu.size();
 		for (int i = 0; i < size; i++)
@@ -289,14 +317,24 @@ public class PetriDishPanel extends JPanel {
 		*/
 
 		// population count
-		ArrayList<Integer> census = dish.getCensus();
+		ArrayList<int[]> census = dish.getCensus();
 		size = census.size();
 		for (int i = 0; i < size - 1; i++) {
+			// herbivores
 			int x1 = 10 + 3 * i;
-			int y1 = (int) (screenHeight - 10 - census.get(i));
+			int y1 = (int) (screenHeight - 10 - census.get(i)[0]);
 			int x2 = x1 + 3;
-			int y2 = (int) (screenHeight - 10 - census.get(i + 1));
+			int y2 = (int) (screenHeight - 10 - census.get(i + 1)[0]);
+			g.setColor(Color.BLUE);
 			g.drawLine(x1, y1, x2, y2);
+
+			// carnivores
+			int x3 = 10 + 3 * i;
+			int y3 = (int) (screenHeight - 10 - census.get(i)[1]);
+			int x4 = x1 + 3;
+			int y4 = (int) (screenHeight - 10 - census.get(i + 1)[1]);
+			g.setColor(Color.RED);
+			g.drawLine(x3, y3, x4, y4);
 		}
 	}
 
@@ -304,25 +342,54 @@ public class PetriDishPanel extends JPanel {
 		return Math.round(num * Math.pow(10, figures)) / Math.pow(10, figures);
 	}
 
+	// step simulation
+	private void step() {
+		dish.step(targetTime);
+	}
+
 	// key inputs
 	class KeyHandler extends KeyAdapter {
 		public void keyPressed(KeyEvent e) {
-			if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+			// pause sim
+			if (e.getKeyCode() == KeyEvent.VK_SPACE)
 				pause = !pause;
-			}
+
+			// step simulation
+			else if (e.getKeyCode() == KeyEvent.VK_RIGHT)
+				step();
 		}
 
 		public void keyReleased(KeyEvent e) {
-			if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+			int keyCode = e.getKeyCode();
+
+			// quit program
+			if (keyCode == KeyEvent.VK_ESCAPE)
 				System.exit(0);
-			} else if (e.getKeyCode() == KeyEvent.VK_F3) {
+
+			// toggle debug menu
+			else if (keyCode == KeyEvent.VK_F3)
 				debug = !debug;
-			} else if (e.getKeyCode() == KeyEvent.VK_R) {
+
+			// reset dish
+			else if (keyCode == KeyEvent.VK_R) {
 				pause = true;
 				dish.reset();
-			} else if (e.getKeyCode() == KeyEvent.VK_U) {
-				limit = !limit; // toggle FPS/sim limiter
 			}
+
+			// toggle FPS/sim limiter
+			else if (keyCode == KeyEvent.VK_U)
+				limit = !limit;
+
+			// toggle paths
+			else if (keyCode == KeyEvent.VK_P)
+				paths = !paths;
+
+			// modify amount of food
+			else if (keyCode == KeyEvent.VK_F)
+				dish.increaseFood();
+			else if (keyCode == KeyEvent.VK_V)
+				dish.decreaseFood();
+
 		}
 	}
 
@@ -338,8 +405,8 @@ public class PetriDishPanel extends JPanel {
 				// calculating bounds
 				int cx = screenWidth / 2;
 				int cy = screenHeight / 2;
-				int x = (int) Math.round(cx + r * organism.getSX()) - osize;
-				int y = (int) Math.round(cy - r * organism.getSY()) - osize;
+				int x = (int) Math.round(cx + r * organism.getX()) - osize;
+				int y = (int) Math.round(cy - r * organism.getY()) - osize;
 				int w = osize * 2;
 				int h = osize * 2;
 				Rectangle bounds = new Rectangle(x, y, w, h);
