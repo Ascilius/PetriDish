@@ -1,19 +1,15 @@
+package Organisms;
 import java.awt.Color;
 
 public class Agar implements Entity {
 
-	// dish
-	protected PetriDish dish;
-
 	// state
 	protected double x, y;
 	protected Color color;
-	protected double calories = 0.5;
+	public static double calories = 0.1;
 	protected boolean eaten = false;
 
-	public Agar(PetriDish dish, double x, double y) {
-		this.dish = dish;
-
+	public Agar(double x, double y) {
 		this.x = x;
 		this.y = y;
 		this.color = Color.GREEN;
@@ -27,10 +23,6 @@ public class Agar implements Entity {
 	public boolean wasEaten() {
 		return eaten;
 	}
-
-	// TOREMOVE: @formatter:off
-	// dish
-	public PetriDish getDish() { return dish; }
 		
 	// state
 	public double getX() { return x; }

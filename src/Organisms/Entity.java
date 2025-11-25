@@ -1,8 +1,7 @@
+package Organisms;
 import java.awt.Color;
 
 public interface Entity {
-	// TOREMOVE: @formatter:off
-	public PetriDish getDish();
 
 	public double getX();
 	public double getY();

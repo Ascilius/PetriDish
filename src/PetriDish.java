@@ -1,37 +1,69 @@
 import java.awt.Color;
 import java.util.ArrayList;
 
+import Organisms.Agar;
+import Organisms.Carnivore;
+import Organisms.Herbivore;
+import Organisms.Organism;
+
 public class PetriDish {
-
-	// agar
-	private int na = 200; // number of agar
+	
+	private static boolean DEBUG = true;
+	
+	// statistics
+	private int t = 0;
+	
+	private ArrayList<Integer> agarCensus = new ArrayList<Integer>();
+	private ArrayList<Integer> herbCensus = new ArrayList<Integer>();
+	private ArrayList<Integer> carnCensus = new ArrayList<Integer>();
+	private int ct = 100; // number of steps before each census
+	protected int historyLimit = 100;
+	
+	// entities
+	protected int na = 2000; // number of agar
+	protected int nh = 1000;
+	protected int nc = 500;
+	
+	/*
+	protected int na = 0;
+	protected int nh = 1;
+	protected int nc = 1;
+	
+	protected int nc = 1;
+	protected int nh = nc * 7;
+	protected int na = nh * 286;
+	*/
+	
 	private ArrayList<Agar> agars = new ArrayList<Agar>();
-
-	// herbivores
-	private int nh = 20; // min number of herbivores
+	
+	private double range = 0.005; // organism eating range
 	private ArrayList<Herbivore> herbs = new ArrayList<Herbivore>();
-
-	// canrivores
-	private int nc = 10;
 	private ArrayList<Carnivore> carns = new ArrayList<Carnivore>();
-
-	// organisms
-	private double range = 0.01; // organism eating range
+	
+	// other
 	private Organism selected = null;
-	private ArrayList<int[]> census = new ArrayList<int[]>();
-	private int historyLimit = 100;
+	private boolean selectNew = false; // TODO: optimize
 	private int v = 64; // color variance
 
 	public PetriDish() {
 		reset();
 	}
 
-	// generates a random location within the r=1 petri dish
-	public double[] genRanLoc() {
-		double r = Math.random();
-		double a = Math.random() * 2 * Math.PI;
-		double x = Math.cos(a) * r;
-		double y = Math.sin(a) * r;
+	// generates a random location within a radius r petri dish
+	public double[] genRanLoc(double R) {
+		double x = 0.0;
+		double y = 0.0;
+		
+		boolean pass = false;
+		while (pass == false) {
+			x = Math.random() * 2 - 1;
+			y = Math.random() * 2 - 1;
+			
+			double r = Math.sqrt(x * x + y * y);
+			if (r < R)
+				pass = true;
+		}
+		
 		double[] loc = { x, y };
 		return loc;
 	}
@@ -59,13 +91,13 @@ public class PetriDish {
 	}
 
 	public void generateAgar() {
-		double[] loc = genRanLoc(); // generating random location on dish
-		agars.add(new Agar(this, loc[0], loc[1]));
+		double[] loc = genRanLoc(1.0); // generating random location on dish
+		agars.add(new Agar(loc[0], loc[1]));
 	}
 
 	public void generateHerb() {
 		// physical
-		double[] loc = genRanLoc();
+		double[] loc = genRanLoc(1.0);
 		double x = loc[0];
 		double y = loc[1];
 		double a = Math.random() * 2 * Math.PI; // generating random starting direction
@@ -76,12 +108,12 @@ public class PetriDish {
 		int B = (int) (Math.random() * v) + (255 - v);
 		Color color = new Color(R, G, B);
 
-		herbs.add(new Herbivore(this, x, y, a, color));
+		herbs.add(new Herbivore(x, y, a, color));
 	}
 
 	public void generateCarn() {
 		// physical
-		double[] loc = genRanLoc();
+		double[] loc = genRanLoc(1.0);
 		double x = loc[0];
 		double y = loc[1];
 		double a = Math.random() * 2 * Math.PI;
@@ -92,7 +124,7 @@ public class PetriDish {
 		int B = (int) (Math.random() * v);
 		Color color = new Color(R, G, B);
 
-		carns.add(new Carnivore(this, x, y, a, color));
+		carns.add(new Carnivore(x, y, a, color));
 	}
 
 	// TOREMOVE: @formatter:off
@@ -100,8 +132,32 @@ public class PetriDish {
 	public void addCarn(Carnivore newCarn) { carns.add(newCarn); } // a carnivore has split
 	// TOREMOVE: @formatter:on
 
+	// spawn new agar from dead organism
+	private void decomposeOrg(Organism dead) {
+		double x = dead.getX();
+		double y = dead.getY();
+		
+		double leftover = dead.getEnergy();
+		long n = Math.round(leftover / Agar.calories);
+		
+		/*
+		if (DEBUG)
+			System.out.printf("DEBUG: l = %f, c = %f, n = %d\n", leftover, Agar.calories, n);
+		*/
+		
+		for (int i = 0; i < n; i++) {
+			double[] loc = genRanLoc(0.01);
+			loc[0] += x;
+			loc[1] += y;
+			agars.add(new Agar(loc[0], loc[1]));
+		}
+	}
+	
 	// step simulation
 	public void step(long targetTime) {
+		// looking
+		look();
+		
 		// thinking
 		for (Herbivore herb : herbs)
 			herb.think();
@@ -119,17 +175,33 @@ public class PetriDish {
 
 		// removing eaten or dead entities
 		clean();
-
-		// respawning up to minimum entity counts
-		while (agars.size() < na)
+		
+		/*
+		// TODO: agar "growth"
+		long n = Math.round(1.0 * na / agars.size()) - 1; // more agar grows the less there is (to keep the ecosystem alive?)
+		if (DEBUG && n > 0)
+			System.out.printf("DEBUG: t: %d, n = %d\n", t, n);
+		
+		for (int i = 0; i < n; i++)
 			generateAgar();
-		while (herbs.size() < nh)
+		*/
+		
+		/*
+		// respawning up to minimum entity counts
+		while (agars.size() < minAgar)
+			generateAgar();
+		while (herbs.size() < minHerb)
 			generateHerb();
-		while (carns.size() < nc)
+		while (carns.size() < minCarn)
 			generateCarn();
+		*/
 
-		// looking
-		look();
+		if (selectNew)
+			selectRandom();
+		
+		t++;
+		if (t % ct == 0)
+			takeCensus();
 	}
 
 	// having organisms eat
@@ -151,8 +223,11 @@ public class PetriDish {
 				double d = Math.sqrt(dx * dx + dy * dy);
 
 				// checking if food is within range
-				if (d < range)
-					herb.eatAgar(agar);
+				if (d < range) {
+					Herbivore newHerb = herb.eatAgar(agar);
+					if (newHerb != null)
+						herbs.add(newHerb);
+				}
 			}
 		}
 
@@ -173,8 +248,11 @@ public class PetriDish {
 				double d = Math.sqrt(dx * dx + dy * dy);
 
 				// checking if food is within range
-				if (d < range)
-					carn.eatPrey(herb);
+				if (d < range) {
+					Carnivore newCarn = carn.eatPrey(herb);
+					if (newCarn != null)
+						carns.add(newCarn);
+				}
 			}
 		}
 	}
@@ -193,11 +271,13 @@ public class PetriDish {
 		// removing eaten or dead herbs
 		for (int i = 0; i < herbs.size(); i += 0) {
 			Herbivore herb = herbs.get(i);
-			if (herb.wasEaten() || herb.isDead()) {
+			if (herb.wasEaten())
 				herbs.remove(herb);
-				if (herb.equals(selected))
-					selected = null;
-			} else
+			else if (herb.isDead()) {
+				herbs.remove(herb);
+				decomposeOrg(herb);
+			}
+			else
 				i++;
 		}
 
@@ -206,10 +286,42 @@ public class PetriDish {
 			Carnivore carn = carns.get(i);
 			if (carn.isDead()) {
 				carns.remove(carn);
-				if (carn.equals(selected))
-					selected = null;
-			} else
+				decomposeOrg(carn);
+			}
+			else
 				i++;
+		}
+		
+		// randomly select new organism if selected was removed
+		int nh = herbs.size();
+		int nc = carns.size();
+		int n = nh + nc;
+		
+		if (n == 0) {
+			selected = null;
+			selectNew = true;
+		}
+		
+		else if (selected != null && (selected.wasEaten() || selected.isDead()))
+			selectRandom();
+	}
+	
+	private void selectRandom() {
+		selectNew = false;
+		
+		int nh = herbs.size();
+		int nc = carns.size();
+		int n = nh + nc;
+		
+		if (n == 0) // don't attempt to select a new org if there are none
+			return;
+		
+		int i = (int) (Math.random() * n);
+		if (i < nh)
+			selected = herbs.get(i);
+		else {
+			i -= nh;
+			selected = carns.get(i);
 		}
 	}
 
@@ -270,15 +382,22 @@ public class PetriDish {
 			agars.remove(0);
 	}
 
+	// counting entities
 	public void takeCensus() {
-		// count organisms
-		int[] newCensus = { herbs.size(), carns.size() };
-		census.add(newCensus);
-		if (census.size() > historyLimit)
-			census.remove(0);
+		agarCensus.add(agars.size());
+		herbCensus.add(herbs.size());
+		carnCensus.add(carns.size());
+		
+		if (agarCensus.size() > historyLimit) {
+			agarCensus.remove(0);
+			herbCensus.remove(0);
+			carnCensus.remove(0);
+		}
 	}
 
 	// TOREMOVE: @formatter:off
+	public int getTime() { return t; }
+	
 	public ArrayList<Agar> getAgars() {	return agars; }
 	
 	public ArrayList<Herbivore> getHerbs() { return herbs; }
@@ -292,6 +411,8 @@ public class PetriDish {
 	
 	public Organism getSelected() {	return selected; }
 	public void setSelected(Organism selected) { this.selected = selected; }
-	public ArrayList<int[]> getCensus() { return census; }
-
+	public ArrayList<Integer> getAgarCensus() { return agarCensus; }
+	public ArrayList<Integer> getHerbCensus() { return herbCensus; }
+	public ArrayList<Integer> getCarnCensus() { return carnCensus; }
+	
 }

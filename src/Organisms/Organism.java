@@ -1,10 +1,8 @@
+package Organisms;
 import java.awt.Color;
 import java.util.ArrayList;
 
 public class Organism implements Entity {
-
-	// dish
-	protected PetriDish dish;
 
 	// physics
 	protected double x, y;
@@ -12,31 +10,30 @@ public class Organism implements Entity {
 
 	// path
 	protected ArrayList<double[]> path = new ArrayList<>();
-	protected int pathLength = 100; // -1 = unlimited
+	protected int pathLength = 10; // -1 = unlimited
 
 	// attributes
 	protected Color color;
-	protected double energy = 1.0, splitThreshold;
+	protected double metabolism = 1.0;
+	protected double energy = 1.0, splitThreshold, minEnergy;
 	protected boolean eaten = false, dead = false;
 
 	// movement
-	protected double speed = 3 * 10e-6, speedCost = 16;
-	protected double turn = Math.PI / 16;
+	protected double speed = 0.00001, speedCost;
+	protected double maxTurn = Math.PI / 64; // TODO: remove?
 
 	// sight
-	protected double sightRange = 0.25, rangeCost = 10e-4;
-	protected double FOV = Math.PI / 3, FOVCost = 0.1;
+	protected double sightRange = 0.1, rangeCost;
+	protected double FOV = Math.PI / 3, FOVCost;
 	protected ArrayList<Entity> leftSight = new ArrayList<Entity>(); // entities the organism sees on its left
 	protected ArrayList<Entity> rightSight = new ArrayList<Entity>();
 
 	// brain
-	protected Brain brain = new Brain();
+	protected Brain brain;
 	protected double[] inputs = new double[7]; // hunger (1), avg left color (rgb) (3), avg right color (rgb) (3), total 7
-	protected double[] outputs = new double[3]; // speed, left turn, right turn (3)
+	protected double[] outputs = new double[2]; // speed, turn (2)
 
-	public Organism(PetriDish dish, double x, double y, double a, Color color) {
-		this.dish = dish;
-
+	protected Organism(double x, double y, double a, Color color) {
 		this.x = x;
 		this.y = y;
 		this.a = a;
@@ -44,9 +41,7 @@ public class Organism implements Entity {
 		this.color = color;
 	}
 
-	public Organism(Organism parent) {
-		this.dish = parent.getDish();
-
+	protected Organism(Organism parent) {
 		this.x = parent.getX();
 		this.y = parent.getY();
 		this.a = Math.random() * 2 * Math.PI;
@@ -76,11 +71,9 @@ public class Organism implements Entity {
 				inputs[2] += entityColor.getGreen();
 				inputs[3] += entityColor.getBlue();
 			}
-			/*
 			inputs[1] /= size;
 			inputs[2] /= size;
 			inputs[3] /= size;
-			*/
 		}
 
 		// right sight
@@ -95,19 +88,13 @@ public class Organism implements Entity {
 				inputs[5] += entityColor.getGreen();
 				inputs[6] += entityColor.getBlue();
 			}
-			/*
 			inputs[4] /= size;
 			inputs[5] /= size;
 			inputs[6] /= size;
-			*/
 		}
 
 		// thinking
 		outputs = brain.think(inputs);
-		/*
-		System.out.println("Debug: " + inputs[0] + ", " + inputs[1] + ", " + inputs[2] + ", " + inputs[3] + ", " + inputs[4] + ", " + inputs[5] + ", " + inputs[6]);
-		System.out.println("Debug: " + outputs[0] + ", " + outputs[1] + ", " + outputs[2] + "\n");
-		*/
 	}
 
 	public void move(long timeStep) { // timeStep in ms
@@ -127,16 +114,6 @@ public class Organism implements Entity {
 		double dx = desiredSpeed * (1000 / timeStep) * Math.cos(a);
 		double sin = Math.sin(a);
 		double dy = desiredSpeed * (1000 / timeStep) * Math.sin(a);
-		/*
-		System.out.println("Debug: speed: " + speed);
-		System.out.println("Debug: a: " + a);
-		System.out.println("Debug: cos: " + cos);
-		System.out.println("Debug: sin: " + sin);
-		System.out.println("Debug: timeStep: " + timeStep);
-		System.out.println("Debug: desiredSpeed: " + desiredSpeed);
-		System.out.println("Debug: timeStep: " + timeStep);
-		System.out.println("Debug: ( " + dx + ", " + dy + " )\n");
-		*/
 		x += dx;
 		y += dy;
 
@@ -155,9 +132,8 @@ public class Organism implements Entity {
 	}
 
 	public void turn() {
-		// brain determines turn
-		a += outputs[1] - outputs[2];
-
+		a += outputs[1] * maxTurn;
+		
 		// over 360
 		while (a >= (2 * Math.PI))
 			a -= 2 * Math.PI;
@@ -175,7 +151,7 @@ public class Organism implements Entity {
 		energy -= sightRange * rangeCost;
 
 		// ran out of energy
-		if (energy <= 0.0)
+		if (energy <= minEnergy)
 			dead = true; // mark organism as dead
 	}
 
@@ -221,17 +197,14 @@ public class Organism implements Entity {
 			}
 		}
 	}
-
+	
 	// eaten functions are specified within respective organism files
 	public double eaten() {
-		System.out.println("ERROR: Something has gone wrong");
+		System.out.println("WARNING: Organism.eaten() was called somehow");
 		return 0;
 	}
-
-	// TOREMOVE: @formatter:off
-	// dish
-	public PetriDish getDish() { return dish; }
 	
+	// TOREMOVE: @formatter: off
 	// physics
 	public double getX() { return x; }
 	public double getY() { return y; }

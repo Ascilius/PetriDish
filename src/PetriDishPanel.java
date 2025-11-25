@@ -1,3 +1,4 @@
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -9,36 +10,42 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
-import java.util.concurrent.TimeUnit;
 
 import javax.swing.JPanel;
+
+import Organisms.Agar;
+import Organisms.Brain;
+import Organisms.Entity;
+import Organisms.Organism;
 
 public class PetriDishPanel extends JPanel {
 
 	// debug
-	private boolean debug = true;
+	private boolean DEBUG = true;
 	private final int figures = 3;
 
 	// screen
 	private int screenWidth, screenHeight;
+	private double censusWidthScale = 4;
+	private double censusHeightScale;
+	private BasicStroke REGULAR = new BasicStroke(1f);
+	private BasicStroke THICCCC = new BasicStroke(10f);
 
 	// engine
 	private double targetFPS = 59.95;
 	private long targetTime = (long) (1000 / targetFPS); // ms
-	private int totalFrames = 0;
-	private long totalTime = 0; // ms
-	private long frameTime = 0, waitTime = 0; // ms
+	private int periodSteps = 0;
+	private long periodTime = 0;
 	private double currentFPS = 0;
-	private boolean limit = true;
+	// private boolean limit = false; // FPS limiter
 	private boolean pause = true;
 	private ArrayList<Double> FPShistory = new ArrayList<Double>();
+	private int historyLim = 100;
 
 	// dish
-	private int r, buffer = 50, osize = 5;
+	private int r, buffer = 50, osize = 3;
 	private PetriDish dish;
-	private boolean paths = true;
-	private int t = 0;
-	private int n = 1000; // how often to take a census
+	private boolean paths = false;
 
 	// inputs
 	private KeyHandler keyHandler; // key inputs
@@ -50,11 +57,16 @@ public class PetriDishPanel extends JPanel {
 		// screen
 		this.screenWidth = (int) screenWidth;
 		this.screenHeight = (int) screenHeight;
-
+		
 		// dish
 		dish = new PetriDish();
 		r = (this.screenHeight - buffer * 2) / 2;
-
+		
+		censusHeightScale = (screenHeight - 20) / (4.0 * dish.na);
+		// censusHeightScale = (double) dish.historyLimit / dish.na;
+		if (DEBUG)
+			System.out.printf("DEBUG: censusHeightScale: %f\n", censusHeightScale);
+		
 		// inputs
 		this.keyHandler = new KeyHandler();
 		addKeyListener(this.keyHandler);
@@ -70,16 +82,6 @@ public class PetriDishPanel extends JPanel {
 
 		// new frame
 		long startTime = System.currentTimeMillis();
-		// fps calculation
-		if (totalFrames >= targetFPS) {
-			currentFPS = totalFrames / (totalTime / 1000.0);
-			totalFrames = 0;
-			totalTime = 0;
-			// updating FPS history
-			FPShistory.add(currentFPS);
-			if (FPShistory.size() > 100)
-				FPShistory.remove(0);
-		}
 
 		// background
 		g.setColor(Color.BLACK);
@@ -87,24 +89,30 @@ public class PetriDishPanel extends JPanel {
 
 		// dish
 		paintDish(g);
-		if (pause == false) {
-			if (t >= n) {
-				dish.takeCensus();
-				t = 0;
-			}
+		if (pause == false)
 			step();
+		else {
+			g.setColor(Color.RED);
+			g.setStroke(THICCCC);
+			g.drawRect(0, 0, screenWidth, screenHeight);
+			
+			g.setStroke(REGULAR);
 		}
 
 		// debug
-		if (debug)
+		if (DEBUG)
 			paintDebug(g);
 
-		// end frame (TOFIX: need more accurate timekeeping)
-		t++;
-		totalFrames++;
+		// end frame
+		periodSteps++;
+		
 		long endTime = System.currentTimeMillis();
-		frameTime = endTime - startTime;
+		periodTime += endTime - startTime;
+		
+		// TODO: fix
+		/*
 		waitTime = Math.max(targetTime - frameTime, 0);
+		
 		if (limit == true) {
 			try {
 				TimeUnit.MILLISECONDS.sleep(waitTime);
@@ -112,9 +120,23 @@ public class PetriDishPanel extends JPanel {
 				e.printStackTrace();
 			}
 		}
+		
 		endTime = System.currentTimeMillis();
 		frameTime = endTime - startTime - 4;
 		totalTime += frameTime;
+		*/
+		
+		// fps calculation (every 1s)
+		if (periodTime >= 1000) {
+			currentFPS = periodSteps / (periodTime / 1000.0);
+			periodSteps = 0;
+			periodTime = 0;
+			
+			// updating FPS history
+			FPShistory.add(currentFPS);
+			if (FPShistory.size() > historyLim)
+				FPShistory.remove(0);
+		}
 
 		// next frame
 		repaint();
@@ -188,7 +210,7 @@ public class PetriDishPanel extends JPanel {
 			}
 
 			// bounds, FOV, and LOS
-			if (debug && organism.equals(dish.getSelected())) {
+			if (DEBUG && organism.equals(dish.getSelected())) {
 				// bounds
 				g.setColor(Color.BLUE);
 				g.drawRect(x, y, w, h);
@@ -248,6 +270,18 @@ public class PetriDishPanel extends JPanel {
 		}
 	}
 
+	public String toString(int[] arr) {
+		String str = "[ ";
+		int size = arr.length;
+		for (int i = 0; i < size; i++) {
+			if (i != 0)
+				str += ", ";
+			str += arr[i];
+		}
+		str += " ]";
+		return str;
+	}
+	
 	public String toString(double[] arr) {
 		String str = "[ ";
 		int size = arr.length;
@@ -269,32 +303,22 @@ public class PetriDishPanel extends JPanel {
 		ArrayList<String> debugMenu = new ArrayList<String>();
 		debugMenu.add("Debug Menu:");
 		debugMenu.add("");
-		debugMenu.add("Target FPS: " + targetFPS);
-		debugMenu.add("Target Time (ms): " + targetTime);
-		debugMenu.add("Total Frames: " + totalFrames);
-		debugMenu.add("Frame Time: " + frameTime);
-		debugMenu.add("Wait Time: " + waitTime);
-		debugMenu.add("Total Time: " + totalTime);
+		// debugMenu.add("Target FPS: " + targetFPS);
+		debugMenu.add("dt (ms): " + targetTime);
+		debugMenu.add("Period Frames: " + periodSteps);
+		debugMenu.add("Period Time: " + periodTime);
 		debugMenu.add("Current FPS: " + round(currentFPS));
-		debugMenu.add("FPS Limit: " + limit);
+		debugMenu.add("Total Steps: " + dish.getTime());
 		debugMenu.add("Paused: " + pause);
 		debugMenu.add("");
 		debugMenu.add("Last Click: " + mouseX + ", " + mouseY);
 		Organism selected = dish.getSelected();
-		if (selected != null) {
-			debugMenu.add("Selected: " + selected);
-			debugMenu.add("X: " + selected.getX());
-			debugMenu.add("Y: " + selected.getY());
-			debugMenu.add("Direction: " + round(selected.getDir() / Math.PI * 180));
-			debugMenu.add("Energy: " + round(selected.getEnergy()));
-			debugMenu.add("Speed: " + selected.getSpeed());
-			debugMenu.add("Sight Range: " + round(selected.getSightRange()));
-			debugMenu.add("Inputs: " + toString(selected.getInputs()));
-			debugMenu.add("Outputs: " + toString(selected.getOutputs()));
-		}
+		if (selected != null)
+			debugMenu.addAll(printSelected(selected));
 		debugMenu.add("");
 		debugMenu.add("Buffer: " + buffer);
 		debugMenu.add("Radius: " + r);
+		debugMenu.add("Paths: " + paths);
 		debugMenu.add("");
 		debugMenu.add("Foods: " + dish.getAgars().size());
 		debugMenu.add("Herbivores: " + dish.getHerbs().size());
@@ -317,25 +341,72 @@ public class PetriDishPanel extends JPanel {
 		*/
 
 		// population count
-		ArrayList<int[]> census = dish.getCensus();
-		size = census.size();
+		ArrayList<Integer> agars = dish.getAgarCensus();
+		plotLine(g, agars, Color.GREEN);
+		
+		ArrayList<Integer> herbs = dish.getHerbCensus();
+		plotLine(g, herbs, Color.BLUE);
+		
+		ArrayList<Integer> carns = dish.getCarnCensus();
+		plotLine(g, carns, Color.RED);
+	}
+	
+	private void plotLine(Graphics2D g, ArrayList<Integer> d, Color c) {
+		g.setColor(c);
+		
+		int size = d.size();
 		for (int i = 0; i < size - 1; i++) {
-			// herbivores
-			int x1 = 10 + 3 * i;
-			int y1 = (int) (screenHeight - 10 - census.get(i)[0]);
-			int x2 = x1 + 3;
-			int y2 = (int) (screenHeight - 10 - census.get(i + 1)[0]);
-			g.setColor(Color.BLUE);
+			int x1 = (int) (10 + censusWidthScale * i);
+			int y1 = (int) (screenHeight - 10 - censusHeightScale * d.get(i));
+			int x2 = (int) (x1 + censusWidthScale);
+			int y2 = (int) (screenHeight - 10 - censusHeightScale * d.get(i + 1));
 			g.drawLine(x1, y1, x2, y2);
-
-			// carnivores
-			int x3 = 10 + 3 * i;
-			int y3 = (int) (screenHeight - 10 - census.get(i)[1]);
-			int x4 = x1 + 3;
-			int y4 = (int) (screenHeight - 10 - census.get(i + 1)[1]);
-			g.setColor(Color.RED);
-			g.drawLine(x3, y3, x4, y4);
 		}
+	}
+	
+	private ArrayList<String> printSelected(Organism selected) {
+		ArrayList<String> selectedMenu = new ArrayList<String>();
+		selectedMenu.add("Selected: " + selected);
+		selectedMenu.add("X: " + selected.getX());
+		selectedMenu.add("Y: " + selected.getY());
+		selectedMenu.add("Direction: " + round(selected.getDir() / Math.PI * 180));
+		selectedMenu.add("Energy: " + round(selected.getEnergy()));
+		selectedMenu.add("Speed: " + selected.getSpeed());
+		selectedMenu.add("Sight Range: " + round(selected.getSightRange()));
+		
+		Brain selectedBrain = selected.getBrain();
+		int numLayers = selectedBrain.numLayers();
+		
+		selectedMenu.add("structure: " + toString(selectedBrain.getStruct()));
+		selectedMenu.add("acts: " + toString(selectedBrain.getActs()));
+		selectedMenu.add("numLayers: " + numLayers);
+		selectedMenu.add("inputs: " + toString(selected.getInputs()));
+		selectedMenu.add("outputs: " + toString(selected.getOutputs()));
+		
+		double[][][] weights = selectedBrain.getWeights();
+		
+		for (int l = 1; l <= numLayers; l++) {
+			double[][] wl = weights[l-1];
+			int dj = wl.length;
+			int di = wl[0].length;
+			
+			String raw = "W%d: %dx%d";
+			String formatted = String.format(raw, l, dj, di);
+			
+			selectedMenu.add(formatted);
+			
+			for (int j = 0; j < dj; j++) {
+				String line = "";
+				for (int i = 0; i < di; i++) {
+					raw = "  %.2f";
+					formatted = String.format(raw, wl[j][i]);
+					line += formatted;
+				}
+				selectedMenu.add(line);
+			}
+		}
+		
+		return selectedMenu;
 	}
 
 	private double round(double num) {
@@ -368,7 +439,7 @@ public class PetriDishPanel extends JPanel {
 
 			// toggle debug menu
 			else if (keyCode == KeyEvent.VK_F3)
-				debug = !debug;
+				DEBUG = !DEBUG;
 
 			// reset dish
 			else if (keyCode == KeyEvent.VK_R) {
@@ -376,10 +447,12 @@ public class PetriDishPanel extends JPanel {
 				dish.reset();
 			}
 
+			/*
 			// toggle FPS/sim limiter
 			else if (keyCode == KeyEvent.VK_U)
 				limit = !limit;
-
+			*/
+			
 			// toggle paths
 			else if (keyCode == KeyEvent.VK_P)
 				paths = !paths;
