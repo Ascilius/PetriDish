@@ -1,12 +1,12 @@
 ## Petri Dish
 
 ### Controls:
-Space: Pause
-Right: Step
-Escape: Exit
-F3: Toggle debug UI
-R: Reset
-P: Pause
+ - Space: Pause
+ - Right: Step
+ - Escape: Exit
+ - F3: Toggle debug UI
+ - R: Reset
+ - P: Pause
 
 ### todo
  - add agar "growth"
