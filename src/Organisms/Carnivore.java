@@ -6,8 +6,15 @@ public class Carnivore extends Organism {
 	public Carnivore(double x, double y, double a, Color color) {
 		super(x, y, a, color);
 		setup();
-		int[] struct = {7, 5, 2}; // input layer, hidden layer, output layer
-		int[] acts = {Brain.ReLU, Brain.ReLU, Brain.Tanh};
+		
+		/*
+		int[] struct = {7, 5, 3}; // input layer, hidden layer, output layer
+		int[] acts = {Brain.ReLU, Brain.Tanh};
+		*/
+		
+		int[] struct = {7, 3}; // input layer, hidden layer, output layer
+		int[] acts = {Brain.Tanh};
+		
 		this.brain = new Brain(struct, acts);
 	}
 
@@ -17,13 +24,13 @@ public class Carnivore extends Organism {
 	}
 	
 	private void setup() {
-		splitThreshold = 20.0;
+		splitThreshold = 6.0;
 		
 		minEnergy = 0.2;
 		
-		speedCost = 0.5;
-		rangeCost = 0.005;
-		FOVCost = 0.005;
+		speedCost = 100.0;
+		rangeCost = 0.001;
+		FOVCost = 0.001;
 		
 		speedCost = metabolism * speedCost;
 		rangeCost = metabolism * rangeCost;

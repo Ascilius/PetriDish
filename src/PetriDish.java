@@ -21,22 +21,24 @@ public class PetriDish {
 	
 	// entities
 	protected int na = 2000; // number of agar
-	protected int nh = 1000;
-	protected int nc = 500;
+	protected int nh = 800;
+	protected int nc = 100;
 	
 	/*
 	protected int na = 0;
 	protected int nh = 1;
-	protected int nc = 1;
+	protected int nc = 0;
 	
-	protected int nc = 1;
+	protected int nc = 100;
 	protected int nh = nc * 7;
 	protected int na = nh * 286;
 	*/
 	
 	private ArrayList<Agar> agars = new ArrayList<Agar>();
+	private double growthProb = 0.001; // probability of agar growth per step
 	
 	private double range = 0.005; // organism eating range
+	private double eatProb = 0.5; // eating probability
 	private ArrayList<Herbivore> herbs = new ArrayList<Herbivore>();
 	private ArrayList<Carnivore> carns = new ArrayList<Carnivore>();
 	
@@ -50,14 +52,14 @@ public class PetriDish {
 	}
 
 	// generates a random location within a radius r petri dish
-	public double[] genRanLoc(double R) {
+	private double[] genRanLoc(double R) {
 		double x = 0.0;
 		double y = 0.0;
 		
 		boolean pass = false;
 		while (pass == false) {
-			x = Math.random() * 2 - 1;
-			y = Math.random() * 2 - 1;
+			x = (Math.random() * 2 - 1) * R;
+			y = (Math.random() * 2 - 1) * R;
 			
 			double r = Math.sqrt(x * x + y * y);
 			if (r < R)
@@ -66,6 +68,24 @@ public class PetriDish {
 		
 		double[] loc = { x, y };
 		return loc;
+	}
+	
+	private double[] genRanLoc(double[] loc, double R) {
+		double x1 = loc[0];
+		double y1 = loc[1];
+		
+		while (true) {
+			double[] ranLoc = genRanLoc(R); // within radius of loc
+			
+			double x2 = x1 + ranLoc[0];
+			double y2 = y1 + ranLoc[1];
+			
+			double r = Math.sqrt(x2 * x2 + y2 * y2);
+			if (r < 1.0) { // within radius of dish
+				double[] newLoc = {x2, y2};
+				return newLoc;
+			}
+		}
 	}
 
 	public void reset() {
@@ -146,7 +166,7 @@ public class PetriDish {
 		*/
 		
 		for (int i = 0; i < n; i++) {
-			double[] loc = genRanLoc(0.01);
+			double[] loc = genRanLoc(range);
 			loc[0] += x;
 			loc[1] += y;
 			agars.add(new Agar(loc[0], loc[1]));
@@ -176,15 +196,19 @@ public class PetriDish {
 		// removing eaten or dead entities
 		clean();
 		
-		/*
-		// TODO: agar "growth"
-		long n = Math.round(1.0 * na / agars.size()) - 1; // more agar grows the less there is (to keep the ecosystem alive?)
-		if (DEBUG && n > 0)
-			System.out.printf("DEBUG: t: %d, n = %d\n", t, n);
-		
-		for (int i = 0; i < n; i++)
-			generateAgar();
-		*/
+		// agar "growth"
+		ArrayList<Agar> newAgars = new ArrayList<Agar>();
+		for (Agar agar : agars) {
+			
+			double prob = growthProb * (1 / (1 + Math.exp(agars.size()))); // to prevent exponential growth
+			
+			if (Math.random() < prob) { 
+				double[] loc = {agar.getX(), agar.getY()};
+				double[] newLoc = genRanLoc(loc, range);
+				newAgars.add(new Agar(newLoc[0], newLoc[1]));
+			}
+		}
+		agars.addAll(newAgars);
 		
 		/*
 		// respawning up to minimum entity counts
@@ -223,7 +247,7 @@ public class PetriDish {
 				double d = Math.sqrt(dx * dx + dy * dy);
 
 				// checking if food is within range
-				if (d < range) {
+				if (d < range && Math.random() < eatProb) {
 					Herbivore newHerb = herb.eatAgar(agar);
 					if (newHerb != null)
 						herbs.add(newHerb);
@@ -248,7 +272,7 @@ public class PetriDish {
 				double d = Math.sqrt(dx * dx + dy * dy);
 
 				// checking if food is within range
-				if (d < range) {
+				if (d < range && Math.random() < eatProb) {
 					Carnivore newCarn = carn.eatPrey(herb);
 					if (newCarn != null)
 						carns.add(newCarn);

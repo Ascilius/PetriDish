@@ -5,7 +5,7 @@ public class Brain {
 	private static boolean DEBUG = true;
 	
 	private static double MUT = 0.1; // maximum change for each weight
-	protected static int ReLU = 0, Tanh = 1;
+	protected static int Iden = 0, ReLU = 1, Sigm = 2, Tanh = 3;
 	
 	private int[] structure;
 	private int[] acts;
@@ -87,7 +87,7 @@ public class Brain {
 		
 		double dp = 0.0; 
 		for (int i = 0; i < il; i++)
-			dp += weights[i] + inputs[i];
+			dp += weights[i] * inputs[i];
 
 		return dp;
 	}
@@ -99,7 +99,16 @@ public class Brain {
 			return x;
 	}
 	
-	public double tanh(double x) { return Math.tanh(x); }
+	public double Sigm(double x) { return 1 / (1 + Math.exp(-x)); }
+	
+	public double Tanh(double x) {
+		double r = Math.tanh(x);
+			
+		if (false && DEBUG)
+			System.out.printf("DEBUG: x = %f -> %f\n", x, r);
+		
+		return r;
+	}
 
 	public double[] think(double[] nextInputs) {
 		for (int l = 1; l <= numLayers; l++) {
@@ -122,14 +131,21 @@ public class Brain {
 			for (int j = 0; j < dj; j++) {
 				double dp = dotProduct(wl[j], nextInputs);
 				
-				if (act == ReLU)
+				if (act == Iden)
+					outputs[j] = dp;
+				else if (act == ReLU)
 					outputs[j] = ReLU(dp);
+				else if (act == Sigm)
+					outputs[j] = Sigm(dp);
 				else if (act == Tanh)
-					outputs[j] = tanh(dp);
+					outputs[j] = Tanh(dp);
 			}
 			
 			nextInputs = outputs;
 		}
+		
+		if (false && DEBUG)
+			System.out.printf("DEBUG: outputs: [%f, %f, %f]\n", nextInputs[0], nextInputs[1], nextInputs[2]);
 		
 		return nextInputs;
 	}

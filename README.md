@@ -18,6 +18,12 @@
  - zoom/translate camera
  - review access modifiers
 
+### v3.1 (2026-01-24)
+ - updated tracking/.gitignore
+With the assistance of Claude-Code:
+ - Brain.java: fixed dot product calculation
+ - Organism.java: small optimizations
+
 ### v3 (2025-11-25)
  - overhauled Brain
     - now that I know how neural networks function, I can implement them correctly

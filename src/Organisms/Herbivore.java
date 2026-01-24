@@ -6,8 +6,8 @@ public class Herbivore extends Organism {
 	public Herbivore(double x, double y, double a, Color color) {
 		super(x, y, a, color);
 		setup();
-		int[] struct = {7, 2}; // input layer, output layer
-		int[] acts = {Brain.ReLU, Brain.Tanh}; // activation functions for each layer
+		int[] struct = {7, 3}; // input layer, output layer
+		int[] acts = {Brain.Tanh}; // activation functions for each layer (except the input layer)
 		this.brain = new Brain(struct, acts);
 	}
 
@@ -17,13 +17,13 @@ public class Herbivore extends Organism {
 	}
 	
 	private void setup() {
-		splitThreshold = 5.0;
+		splitThreshold = 3.0;
 		
 		minEnergy = 0.1; // minimum energy for organism to survive
 		
-		speedCost = 0.1;
-		rangeCost = 0.001;
-		FOVCost = 0.001;
+		speedCost = 50.0;
+		rangeCost = 0.0001;
+		FOVCost = 0.0001;
 		
 		speedCost = metabolism * speedCost;
 		rangeCost = metabolism * rangeCost;

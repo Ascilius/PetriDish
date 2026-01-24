@@ -4,13 +4,15 @@ import java.util.ArrayList;
 
 public class Organism implements Entity {
 
+	private static boolean DEBUG = true;
+	
 	// physics
 	protected double x, y;
 	protected double a; // radians
 
 	// path
 	protected ArrayList<double[]> path = new ArrayList<>();
-	protected int pathLength = 10; // -1 = unlimited
+	protected int pathLength = 100; // -1 = unlimited
 
 	// attributes
 	protected Color color;
@@ -20,18 +22,18 @@ public class Organism implements Entity {
 
 	// movement
 	protected double speed = 0.00001, speedCost;
-	protected double maxTurn = Math.PI / 64; // TODO: remove?
+	protected double maxTurn = Math.PI;
 
 	// sight
-	protected double sightRange = 0.1, rangeCost;
-	protected double FOV = Math.PI / 3, FOVCost;
+	protected double sightRange = 0.25, rangeCost;
+	protected double FOV = Math.PI / 4, FOVCost;
 	protected ArrayList<Entity> leftSight = new ArrayList<Entity>(); // entities the organism sees on its left
 	protected ArrayList<Entity> rightSight = new ArrayList<Entity>();
 
 	// brain
 	protected Brain brain;
 	protected double[] inputs = new double[7]; // hunger (1), avg left color (rgb) (3), avg right color (rgb) (3), total 7
-	protected double[] outputs = new double[2]; // speed, turn (2)
+	protected double[] outputs = new double[3]; // speed, left turn, right turn (3)
 
 	protected Organism(double x, double y, double a, Color color) {
 		this.x = x;
@@ -49,7 +51,10 @@ public class Organism implements Entity {
 		this.color = parent.getColor();
 
 		this.speed = parent.getSpeed() + (Math.random() - 0.5) * 10e-6;
+		speed = Math.max(speed, 0.0);
+		
 		this.sightRange = parent.getSightRange() + (Math.random() - 0.5) * 0.05;
+		sightRange = Math.max(sightRange, 0.0);
 
 		this.brain = new Brain(parent.getBrain());
 	}
@@ -71,9 +76,9 @@ public class Organism implements Entity {
 				inputs[2] += entityColor.getGreen();
 				inputs[3] += entityColor.getBlue();
 			}
-			inputs[1] /= size;
-			inputs[2] /= size;
-			inputs[3] /= size;
+			inputs[1] /= size * 255;
+			inputs[2] /= size * 255;
+			inputs[3] /= size * 255;
 		}
 
 		// right sight
@@ -88,9 +93,9 @@ public class Organism implements Entity {
 				inputs[5] += entityColor.getGreen();
 				inputs[6] += entityColor.getBlue();
 			}
-			inputs[4] /= size;
-			inputs[5] /= size;
-			inputs[6] /= size;
+			inputs[4] /= size * 255;
+			inputs[5] /= size * 255;
+			inputs[6] /= size * 255;
 		}
 
 		// thinking
@@ -111,18 +116,16 @@ public class Organism implements Entity {
 		// double desiredSpeed = speed;
 		double desiredSpeed = speed * (1 / (1 + Math.pow(Math.E, -4 * outputs[0]))); // brain determines speed
 		double cos = Math.cos(a);
-		double dx = desiredSpeed * (1000 / timeStep) * Math.cos(a);
+		double dx = desiredSpeed * (1000 / timeStep) * cos;
 		double sin = Math.sin(a);
-		double dy = desiredSpeed * (1000 / timeStep) * Math.sin(a);
+		double dy = desiredSpeed * (1000 / timeStep) * sin;
 		x += dx;
 		y += dy;
 
 		// bounds check
 		double r = Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
-		double a = Math.atan(y / x);
+		double a = Math.atan2(y, x);
 		if (r > 1) {
-			if (x < 0)
-				a += Math.PI;
 			x = Math.cos(a);
 			y = Math.sin(a);
 		}
@@ -132,7 +135,7 @@ public class Organism implements Entity {
 	}
 
 	public void turn() {
-		a += outputs[1] * maxTurn;
+		a += (outputs[1] + outputs[2]) * maxTurn;
 		
 		// over 360
 		while (a >= (2 * Math.PI))
@@ -144,6 +147,10 @@ public class Organism implements Entity {
 	}
 
 	private void spendEnergy(double desiredSpeed) {
+		
+		if (false && DEBUG)
+			System.out.printf("DEBUG: desiredSpeed: %f, speedCost: %f\n", desiredSpeed, speedCost);
+		
 		// organism spends based on speed
 		energy -= desiredSpeed * speedCost;
 
